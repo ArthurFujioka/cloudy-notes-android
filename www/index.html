@@ -29,6 +29,14 @@ input:focus,select:focus,textarea:focus{outline:none;border-color:var(--pink)}
 .actions{position:fixed;left:0;right:0;bottom:0;display:flex;justify-content:center;gap:14px;padding:10px 12px calc(10px + env(safe-area-inset-bottom,0px));background:rgba(120,20,90,.55);backdrop-filter:blur(6px);z-index:5}
 #toast{position:fixed;left:50%;top:calc(14px + env(safe-area-inset-top,0px));transform:translate(-50%,-90px);max-width:90%;padding:11px 18px;border-radius:14px;color:#fff;font-weight:700;font-size:.9rem;box-shadow:0 6px 18px rgba(0,0,0,.3);transition:.3s;z-index:9;text-align:center}
 #toast.show{transform:translate(-50%,0)}#toast.ok{background:#2e9e5b}#toast.er{background:#d32f2f}#toast.in{background:#7b3fa0}
+.pick{width:100%;text-align:left;font:inherit;padding:10px 12px;border:2px solid #f3b6d6;border-radius:12px;background:#fff url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='14' height='9'%3E%3Cpath d='M1 1l6 6 6-6' fill='none' stroke='%23ff1f7a' stroke-width='2.5'/%3E%3C/svg%3E") no-repeat right 12px center;color:var(--ink);cursor:pointer;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;padding-right:34px}
+.bar .pick{flex:1.2;min-width:0}
+#sheet{position:fixed;inset:0;background:rgba(60,0,50,.55);display:none;align-items:flex-end;justify-content:center;z-index:20}
+#sheet.open{display:flex}
+#sheet .box{width:100%;max-width:480px;max-height:65vh;overflow-y:auto;background:#fff;border-radius:22px 22px 0 0;padding:14px 14px calc(16px + env(safe-area-inset-bottom,0px))}
+#sheet h3{margin:0 0 10px;color:var(--pink2);font-size:1rem}
+#sheet .opt{display:block;width:100%;text-align:left;font:inherit;font-weight:700;padding:13px 14px;margin-bottom:6px;border:2px solid #f3b6d6;border-radius:12px;background:#fff;color:var(--ink)}
+#sheet .opt.on{background:#ffe6f1;border-color:var(--pink);color:var(--pink2)}
 </style></head><body><div class="wrap">
 <img class="logo" alt="Cloudy Notes" src="assets/logo.png">
 <div class="panel"><h2>Nova anotação</h2>
@@ -43,6 +51,7 @@ input:focus,select:focus,textarea:focus{outline:none;border-color:var(--pink)}
 <div class="hint">Toque ou segure uma anotação para selecioná-la.</div>
 <div id="list"></div></div></div>
 <div class="actions"><button class="btn" id="fav" disabled>FAVORITAR</button><button class="btn" id="del" disabled>EXCLUIR</button></div>
+<div id="sheet"><div class="box"><h3 id="sh"></h3><div id="so"></div></div></div>
 <div id="toast" role="status"></div>
 <script>
 const KN='cloudy_notes',KC='cloudy_cats',BASE=['Escola','Projetos','Lembretes','Outros'];
@@ -61,10 +70,24 @@ function fillSelects(keepC,keepF){
  const c=$('c'),f=$('f');
  c.innerHTML=allCats().map(x=>`<option>${esc(x)}</option>`).join('')+'<option value="__add__">➕ Adicionar categoria</option>';
  f.innerHTML='<option value="">Todas</option>'+allCats().map(x=>`<option>${esc(x)}</option>`).join('');
- if(keepC)c.value=keepC;if(keepF)f.value=keepF;
+ if(keepC)c.value=keepC;if(keepF)f.value=keepF;if(typeof syncPicks==='function')syncPicks();
 }
+
+const picks=[];
+function mkPick(id){const s=$(id),b=document.createElement('button');b.type='button';b.className='pick';s.style.display='none';s.parentNode.insertBefore(b,s);
+ b.onclick=()=>openSheet(s);picks.push([s,b])}
+function syncPicks(){picks.forEach(([s,b])=>{b.textContent=(s.options[s.selectedIndex]||{}).text||''})}
+function openSheet(s){
+ $('sh').textContent=s.id==='c'?'Escolha a categoria':'Filtrar por categoria';
+ $('so').innerHTML='';
+ Array.from(s.options).forEach(o=>{const x=document.createElement('button');x.type='button';x.className='opt'+(o.value===s.value?' on':'');x.textContent=o.text;
+  x.onclick=()=>{s.value=o.value;s.dispatchEvent(new Event('change'));syncPicks();closeSheet()};$('so').appendChild(x)});
+ $('sheet').classList.add('open')}
+function closeSheet(){$('sheet').classList.remove('open')}
+$('sheet').onclick=e=>{if(e.target.id==='sheet')closeSheet()};
+mkPick('c');mkPick('f');
 $('c').onchange=()=>{if($('c').value==='__add__'){$('newcat').style.display='flex';$('nc').focus()}else $('newcat').style.display='none'};
-$('canc').onclick=()=>{$('newcat').style.display='none';$('c').value=BASE[0]};
+$('canc').onclick=()=>{$('newcat').style.display='none';$('c').value=BASE[0];syncPicks()};
 $('addc').onclick=()=>{
  const n=$('nc').value.trim();
  if(!n){toast('Digite o nome da categoria.','er');return}
@@ -90,7 +113,7 @@ function render(){
  const today=new Date().toISOString().slice(0,10);
  $('list').innerHTML=list.length?list.map(n=>`<div class="note${n.id===sel?' sel':''}" data-id="${n.id}">${n.fav?'<span class="star">★</span>':''}<b>${esc(n.t)}</b><p>${esc(n.d)}</p><div class="tags"><span class="tag">${esc(n.c)}</span><span class="tag d${n.dt<today?' late':''}">📅 ${fmt(n.dt)}</span></div></div>`).join('')
  :`<div class="empty">${notes.length?'🔍 Nenhuma anotação encontrada.':'☁️ Nenhuma anotação cadastrada ainda.<br>Crie a primeira acima!'}</div>`;
- $('fav').disabled=$('del').disabled=!sel;
+ $('fav').disabled=$('del').disabled=!sel;syncPicks();
  const s=notes.find(n=>n.id===sel);$('fav').textContent=s&&s.fav?'DESFAVORITAR':'FAVORITAR';
 }
 let lp,moved;const L=$('list');
