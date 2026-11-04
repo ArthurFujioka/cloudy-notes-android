@@ -57,9 +57,9 @@ input:focus,select:focus,textarea:focus{outline:none;border-color:var(--pink)}
 const KN='cloudy_notes',KC='cloudy_cats',BASE=['Escola','Projetos','Lembretes','Outros'];
 let notes=[],cats=[],sel=null;
 const $=id=>document.getElementById(id);
-const CAP=window.Capacitor,PR=(CAP&&CAP.isNativePlatform&&CAP.isNativePlatform())?CAP.registerPlugin('Preferences'):null;
+let PR=null;try{const CAP=window.Capacitor;if(CAP&&CAP.isNativePlatform&&CAP.isNativePlatform())PR=CAP.registerPlugin('Preferences')}catch(e){PR=null}
 function ls(k,d){try{const v=localStorage.getItem(k);return v?JSON.parse(v):d}catch(e){return d}}
-async function load(k,d){if(PR){try{const r=await PR.get({key:k});if(r&&r.value)return JSON.parse(r.value)}catch(e){}}return ls(k,d)}
+async function loadP(k){if(!PR)return null;try{const r=await Promise.race([PR.get({key:k}),new Promise((_,j)=>setTimeout(j,2000))]);return r&&r.value?JSON.parse(r.value):null}catch(e){return null}}
 function store(k,v){const s=JSON.stringify(v);let ok=false;try{localStorage.setItem(k,s);ok=true}catch(e){}
  if(PR){PR.set({key:k,value:s}).catch(()=>toast('Não foi possível salvar.','er'))}else if(!ok)toast('Não foi possível salvar.','er')}
 const allCats=()=>BASE.concat(cats);
@@ -128,5 +128,9 @@ $('fav').onclick=()=>{const n=notes.find(x=>x.id===sel);if(!n)return;
 $('del').onclick=()=>{const n=notes.find(x=>x.id===sel);if(!n)return;
  if(n.fav){toast('Anotação favorita! Remova dos favoritos antes de excluir.','er');return}
  notes=notes.filter(x=>x.id!==sel);sel=null;store(KN,notes);render();toast('Anotação excluída.','in')};
-(async()=>{notes=await load(KN,[]);cats=await load(KC,[]);fillSelects();render()})();
+notes=ls(KN,[]);cats=ls(KC,[]);fillSelects();render();
+(async()=>{const n=await loadP(KN),c=await loadP(KC);let ch=false;
+ if(n){notes=n;ch=true}else if(notes.length)store(KN,notes);
+ if(c){cats=c;ch=true}else if(cats.length)store(KC,cats);
+ if(ch){const sc=$('c').value,sf=$('f').value;fillSelects(sc,sf);render()}})();
 </script></body></html>
